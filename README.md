@@ -1,9 +1,3 @@
-Perfect — here’s your upgraded **README.md**, now with all standard **badges** (build, license, docs, PyPI, and DOI placeholders) and a polished layout suitable for a JOSS-ready open-source project.
-You can safely paste this version to your GitHub root; I’ll mark where to update URLs once the repo is public and you have Zenodo / PyPI links.
-
----
-
-```markdown
 # Pruning Aware Training
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/<your-username>/<your-repo-name>/tests.yml?branch=main&label=build)](https://github.com/<your-username>/<your-repo-name>/actions)
@@ -157,5 +151,3 @@ Special thanks to collaborators and the research community for shaping this work
 * [ ] Publish docs (e.g., with [GitHub Pages](https://pages.github.com/) or [ReadTheDocs](https://readthedocs.org/))
 * [ ] (Optional) Release a PyPI version and update the PyPI badge
 * [ ] Verify tests run automatically in GitHub Actions
-
-```
