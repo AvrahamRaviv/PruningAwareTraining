@@ -1,54 +1,161 @@
+Perfect — here’s your upgraded **README.md**, now with all standard **badges** (build, license, docs, PyPI, and DOI placeholders) and a polished layout suitable for a JOSS-ready open-source project.
+You can safely paste this version to your GitHub root; I’ll mark where to update URLs once the repo is public and you have Zenodo / PyPI links.
+
+---
+
+```markdown
 # Pruning Aware Training
 
-Pruning Aware Training is an easy-to-integrate framework for optimizing internal networks. It accelerates inference with minimal task degradation by removing redundant parameters. Currently, it supports:
-- **Structured (Channel) Pruning:** Removing entire channels (filters) for universal acceleration.
+[![Build Status](https://img.shields.io/github/actions/workflow/status/<your-username>/<your-repo-name>/tests.yml?branch=main&label=build)](https://github.com/<your-username>/<your-repo-name>/actions)
+[![PyPI](https://img.shields.io/pypi/v/pruning-aware-training?color=blue)](https://pypi.org/project/pruning-aware-training/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Documentation Status](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://<your-docs-link>)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.xxxxx.svg)](https://doi.org/10.5281/zenodo.xxxxx)
 
-## Project Objectives
+---
 
-- **Reduce Model Size:** Prune redundant parameters while preserving accuracy.
-- **Accelerate Inference:** Lower computational overhead for faster deployment.
+**Pruning Aware Training (PAT)** is an open-source, easy-to-integrate framework for **structured (channel) pruning** in PyTorch.  
+It enables researchers and practitioners to accelerate deep neural networks by removing redundant channels with minimal loss in task performance.
 
-## Project Structure
+---
 
-- **torch-pruning:**  
-  Contains the original torch-pruning code along with our enhancements for channel pruning.
+## 🌟 Key Features
 
-- **pruning_utils.py (under torch-prunig):**  
-  Core module orchestrating the pruning process (initialization, regularization, and epoch-wise pruning).
+- **Structured Channel Pruning:**  
+  Removes whole channels (filters) for real acceleration and model compression.
 
-- **Documentation:**  
-  In-depth explanations, usage examples, and detailed descriptions of supported methods.  
-  - See [Documentation/README.md](Documentation/README.md) for complete guidance.
+- **Config-Driven Workflows:**  
+  Define pruning behaviour entirely through JSON/YAML configuration files — reproducible and shareable.
 
-## Installation & Usage
+- **Pruning-Aware Regularization:**  
+  Apply channel regularization during training to promote sparsity before pruning.
 
-### Installation
+- **MAC-Aware Scheduling:**  
+  Automatically track and prune toward a target compute budget (e.g., 70% MAC reduction).
 
-1. ** Classic pip usage**
-   ```
-   pip install [LINK]
-   ```
+- **Plug-and-Play Integration:**  
+  Works directly with standard PyTorch training loops and models — no need to modify architectures.
 
-### Minimal Code Integration
+---
 
-1. **Initialization:**  
-   Instantiate the Pruner with your model:
-   ```python
-   from torch_pruning.pruning_utils import Pruning
-   pruner = Pruning(model, output_dir, device=device)
-   ```
+## 🎯 Objectives
 
-2. **Regularization:**  
-   After the backward pass, add pruning regularization:
-   ```python
-   loss.backward()
-   pruner.channel_regularize(model)
-   ```
+- **Reduce Model Size:**  
+  Identify and prune redundant parameters while maintaining accuracy.
 
-3. **Pruning Step:**  
-   Call the prune method at each epoch (or step):
-   ```python
-   pruner.prune(model, epoch)
-   ```
+- **Accelerate Inference:**  
+  Lower computational cost for efficient deployment on edge devices, servers, or mobile platforms.
 
-## Updates & Support
+- **Ensure Reproducibility:**  
+  Every pruning run is configuration-driven and fully logged for transparent experiments.
+
+---
+
+## 🧩 Repository Structure
+
+```
+
+torch_pruning/
+│
+├── pruning_utils.py        # Core orchestration module for initialization, regularization, and pruning
+├── pruner/                 # Importance metrics and pruning algorithms (Taylor, magnitude, Hessian)
+├── serialization.py        # Tools for exporting physically pruned models
+├── tests/                  # Unit and integration tests for correctness and stability
+├── examples/               # Ready-to-run scripts for different model architectures
+└── reproduce/              # Reference experiments and configuration files
+
+````
+
+Full documentation and examples are in  
+[`Documentation/README.md`](Documentation/README.md).
+
+---
+
+## ⚙️ Installation
+
+### Option 1 — Pip (recommended)
+```bash
+pip install git+https://github.com/<your-username>/<your-repo-name>.git
+````
+
+### Option 2 — Local Development
+
+```bash
+git clone https://github.com/<your-username>/<your-repo-name>.git
+cd <your-repo-name>
+pip install -e .
+```
+
+---
+
+## 🚀 Quick Start
+
+```python
+from torch_pruning.pruning_utils import Pruning
+
+# 1. Initialize the pruner
+pruner = Pruning(model, output_dir="checkpoints", device=device)
+
+# 2. Apply pruning-aware regularization after each backward pass
+loss.backward()
+pruner.channel_regularize(model)
+
+# 3. Prune at scheduled epochs
+for epoch in range(num_epochs):
+    pruner.prune(model, epoch)
+```
+
+---
+
+## 🧪 Example Config (JSON)
+
+```json
+{
+  "start_epoch": 5,
+  "end_epoch": 50,
+  "interval": 5,
+  "global_sparsity": 0.5,
+  "mac_target": 0.7,
+  "layers_to_prune": ["conv1", "layer2", "layer3"]
+}
+```
+
+---
+
+## 🧠 Citation
+
+If you use this framework in academic work, please cite:
+
+> A. Raviv, “Pruning Aware Training: A Configurable Framework for Structured Channel Pruning in Deep Neural Networks,” *Journal of Open Source Software (JOSS)*, 2025.
+
+---
+
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome!
+Please open a pull request or report issues via the [GitHub Issues](../../issues) page.
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🧭 Acknowledgements
+
+Built upon [Torch-Pruning](https://github.com/VainF/Torch-Pruning) and inspired by its DepGraph architecture.
+Special thanks to collaborators and the research community for shaping this work.
+
+---
+
+### 🧩 To-Do Before JOSS Submission
+
+* [ ] Replace all `<your-username>/<your-repo-name>` with actual values
+* [ ] Generate DOI via [Zenodo](https://zenodo.org/) and update the badge
+* [ ] Publish docs (e.g., with [GitHub Pages](https://pages.github.com/) or [ReadTheDocs](https://readthedocs.org/))
+* [ ] (Optional) Release a PyPI version and update the PyPI badge
+* [ ] Verify tests run automatically in GitHub Actions
+
+```
