@@ -117,11 +117,11 @@ for epoch in range(num_epochs):
 
 ---
 
-## 🧠 Citation
+//## 🧠 Citation
 
-If you use this framework in academic work, please cite:
+//If you use this framework in academic work, please cite:
 
-> A. Raviv, “Pruning Aware Training: A Configurable Framework for Structured Channel Pruning in Deep Neural Networks,” *Journal of Open Source Software (JOSS)*, 2025.
+//> A. Raviv, “Pruning Aware Training: A Configurable Framework for Structured Channel Pruning in Deep Neural Networks,” *Journal of Open Source Software (JOSS)*, 2025.
 
 ---
 
@@ -145,10 +145,3 @@ Special thanks to collaborators and the research community for shaping this work
 
 ---
 
-### 🧩 To-Do Before JOSS Submission
-
-* [ ] Replace all `<your-username>/<your-repo-name>` with actual values
-* [ ] Generate DOI via [Zenodo](https://zenodo.org/) and update the badge
-* [ ] Publish docs (e.g., with [GitHub Pages](https://pages.github.com/) or [ReadTheDocs](https://readthedocs.org/))
-* [ ] (Optional) Release a PyPI version and update the PyPI badge
-* [ ] Verify tests run automatically in GitHub Actions
