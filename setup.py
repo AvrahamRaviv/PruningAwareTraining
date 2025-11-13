@@ -1,21 +1,11 @@
-import setuptools
-
-with open("README.md", "r") as fh:
-    long_description = fh.read()
-
-setuptools.setup(
-    name="torch-pruning",
-    version="v1.5.1",
+from setuptools import setup, find_packages
+setup(
+    name="pruning-aware-training",
+    version="0.1.0",
+    packages=find_packages(),
+    install_requires=["torch>=1.10", "torchvision", "numpy"],
     author="Avraham Raviv",
-    description="Towards Any Structural Pruning",
-    long_description=long_description,
-    long_description_content_type="text/markdown",
-    url="http://gitlab-srv/avrahamra/sirc_torch_pruning.git",
-    packages=setuptools.find_packages(),
-    classifiers=[
-        "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",
-        "Operating System :: OS Independent",
-    ],
-    python_requires='>=3.6',
+    description="A framework for structured channel pruning in PyTorch",
+    license="MIT",
+    python_requires=">=3.8",
 )

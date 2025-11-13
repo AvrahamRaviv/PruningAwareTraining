@@ -116,15 +116,6 @@ for epoch in range(num_epochs):
 ```
 
 ---
-
-//## 🧠 Citation
-
-//If you use this framework in academic work, please cite:
-
-//> A. Raviv, “Pruning Aware Training: A Configurable Framework for Structured Channel Pruning in Deep Neural Networks,” *Journal of Open Source Software (JOSS)*, 2025.
-
----
-
 ## 🤝 Contributing
 
 Contributions, issues, and feature requests are welcome!
