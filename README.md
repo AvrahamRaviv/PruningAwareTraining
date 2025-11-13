@@ -49,14 +49,15 @@ It enables researchers and practitioners to accelerate deep neural networks by r
 
 ```
 
-torch_pruning/
+PruningAwareTraining/
 │
-├── pruning_utils.py        # Core orchestration module for initialization, regularization, and pruning
-├── pruner/                 # Importance metrics and pruning algorithms (Taylor, magnitude, Hessian)
-├── serialization.py        # Tools for exporting physically pruned models
-├── tests/                  # Unit and integration tests for correctness and stability
-├── examples/               # Ready-to-run scripts for different model architectures
-└── reproduce/              # Reference experiments and configuration files
+├── torch_pruning             # Core code
+├────── pruning_utils.py      # Core orchestration module for initialization, regularization, and pruning
+├────── pruner/               # Importance metrics and pruning algorithms (Taylor, magnitude, Hessian)
+├────── load_pruned_model.py  # Allowing fluent save and load masked and pruned models
+├── tests/                    # Unit and integration tests for correctness and stability
+├── examples/                 # Ready-to-run scripts for different model architectures
+└── reproduce/                # Documantation, Reference experiments and configuration files
 
 ````
 
@@ -69,13 +70,13 @@ Full documentation and examples are in
 
 ### Option 1 — Pip (recommended)
 ```bash
-pip install git+https://github.com/<your-username>/<your-repo-name>.git
+pip install git+https://github.com/AvrahamRaviv/PruningAwareTraining.git
 ````
 
 ### Option 2 — Local Development
 
 ```bash
-git clone https://github.com/<your-username>/<your-repo-name>.git
+git clone https://github.com/AvrahamRaviv/PruningAwareTraining.git
 cd <your-repo-name>
 pip install -e .
 ```
