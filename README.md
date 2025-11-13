@@ -1,6 +1,5 @@
 # Pruning Aware Training
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/<your-username>/<your-repo-name>/tests.yml?branch=main&label=build)](https://github.com/<your-username>/<your-repo-name>/actions)
 [![PyPI](https://img.shields.io/pypi/v/pruning-aware-training?color=blue)](https://pypi.org/project/pruning-aware-training/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Documentation Status](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://<your-docs-link>)
