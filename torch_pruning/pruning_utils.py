@@ -11,7 +11,7 @@ import re
 
 class Pruning:
     """
-    High-level pruning interface combining channel and slice pruning.
+    High-level pruning interface for channel pruning aware training.
     """
 
     def __init__(self, model: nn.Module, config_folder: str, forward_fn: Optional[Any] = None,
@@ -21,7 +21,6 @@ class Pruning:
             with open(config_path, "r") as f:
                 sparsity_args = json.load(f)
             channel_sa = sparsity_args['channel_sparsity_args']
-            slice_sa = sparsity_args['slice_sparsity_args']
             if log is not None:
                 log.info("=> Init pruner module")
             else:
@@ -32,31 +31,22 @@ class Pruning:
                 print(e)
             else:
                 print("There is no pruning_config.json in output folder")
-            channel_sa, slice_sa = None, None
+            channel_sa = None
             if log is not None:
                 log.info("=> Unable to find a valid pruning configuration.")
             else:
                 print("=> Unable to find a valid pruning configuration.")
 
         self.channel_pruner = channel_pruning(channel_sa, model, config_folder, forward_fn, log, device)
-        self.slice_pruner = slice_pruning(slice_sa, model, log)
-        # Synchronize slice block size and channel mask dictionary between pruners.
-        self.channel_pruner.slice_block_size = self.slice_pruner.block_size
-        self.slice_pruner.channel_mask_dict = self.channel_pruner.channel_mask_dict
 
     def channel_regularize(self, model: nn.Module) -> None:
         """Apply channel regularization to the model."""
         self.channel_pruner.regularize(model)
 
-    def slice_regularize(self, model: nn.Module) -> torch.Tensor:
-        """Apply slice regularization to the model."""
-        return self.slice_pruner.regularize(model)
-
     def prune(self, model: nn.Module, epoch: int, log: Optional[Any] = None,
               mask_only: bool = True) -> None:
-        """Perform pruning using both channel and slice pruners."""
+        """Perform pruning using channel pruner."""
         self.channel_pruner.prune(model, epoch, log=log, mask_only=mask_only)
-        self.slice_pruner.prune(model, epoch, log=log)
 
 
 class channel_pruning:
@@ -66,7 +56,6 @@ class channel_pruning:
     def __init__(self, channel_sparsity_args: Optional[Dict[str, Any]], model: nn.Module,
                  config_folder: str, forward_fn: Any, log: Optional[Any] = None,
                  device: Optional[torch.device] = None) -> None:
-        self.channel_mask_dict: Dict[str, torch.Tensor] = {}
         if channel_sparsity_args is None:
             if log is not None:
                 log.info("=> Unable to find a valid channel pruning configuration.")
@@ -121,7 +110,6 @@ class channel_pruning:
         _ = self.measure_macs_masked_model(model)
         self.config_folder = config_folder
         self.max_imp_current_step = torch.tensor(0.0, device=device)
-        self.slice_block_size = None
         self.prune_at_target = self.channel_sparsity_args.get("prune_at_target", False)
         self.reset_optimizer = False
         self.verbose = self.channel_sparsity_args.get("verbose", 1)
@@ -226,7 +214,6 @@ class channel_pruning:
             It is handaled by mask_only flag.
         """
         if not self.prune_channels:
-            self.update_channel_mask_dict(model)
             if self.reach_mac_target and self.verbose > 0:
                 if log is not None:
                     log.info(f" Model already reach {self.mac_target} MACs reduction")
@@ -265,7 +252,7 @@ class channel_pruning:
                     if mask_only:
                         self.mask_group(group)
                     else:
-                        group.prune(idxs[:len(idxs) - (len(idxs) % self.slice_block_size)])
+                        group.prune(idxs)
         elif self.verbose > 0 and self.channels_pruner_args["reg"] > 0:
             if log is not None:
                 log.info(f" Epoch {self.current_epoch}, regularization phase with alpha = {self.channels_pruner_args['reg']}")
@@ -274,8 +261,6 @@ class channel_pruning:
 
         if self.prune_channels_at_init or not mask_only or self.reach_mac_target:
             self.prune_channels = False
-
-        self.update_channel_mask_dict(model)
 
         # log MACs
         current_macs, total_macs = self.measure_macs_masked_model(model)
@@ -341,8 +326,7 @@ class channel_pruning:
 
     def set_layers_to_prune(self, model):
         """
-            Function that setting layers to prune and their coresponding pruning rate
-            As of now it is kind of hard coded, will be replaced by self.channel_sparsity_args['cp_layers'] style (as in Slice Pruning)
+            Function that setting layers to prune and their corresponding pruning rate
         """
         self.calc_prune_rate()
         ltp = self.layers_to_prune
@@ -402,17 +386,6 @@ class channel_pruning:
                 bias_mask[idxs] = 0
                 target_layer.bias.data *= bias_mask
 
-    def update_channel_mask_dict(self, model):
-        for name, param in model.named_modules():
-            if isinstance(param, nn.Conv2d):
-                name = name[len("module."):] if name.startswith("module.") else name
-                pruned_channel_indices = torch.where(torch.sum(param.weight, dim=(1, 2, 3)) == 0)[0]
-                r, _ = divmod(pruned_channel_indices.shape[0], self.slice_block_size)
-                if r == 0:
-                    self.channel_mask_dict[name + '.weight'] = pruned_channel_indices[:r]
-                else:
-                    self.channel_mask_dict[name + '.weight'] = pruned_channel_indices[-r * self.slice_block_size:]
-
     def measure_macs_masked_model(self, model):
         # Get per-layer MACs (and params) as dictionaries
         macs_dict = tp.utils.op_counter.count_ops_and_params(model, self.example_inputs, layer_wise=True)[2]
@@ -462,186 +435,6 @@ class channel_pruning:
             if self.pruner._check_pruning_ratio(group):
                 imp = self.pruner.importance(group, act_only=True)
                 self.pruner.importance.current_max = torch.max(self.pruner.importance.current_max, imp.max())
-
-
-class slice_pruning:
-    def __init__(self, slice_sparsity_args, model, log=None):
-        if slice_sparsity_args is None:
-            if log is not None:
-                log.info("=> Unable to find a valid slice pruning configuration.")
-            else:
-                print("=> Unable to find a valid slice pruning configuration.")
-            self.prune_slices = False
-            self.prune_slices_at_init = False
-            self.block_size = 8
-            return
-
-        self.current_epoch = 0
-        self.current_pr = 0
-        self.slice_sparsity_args = slice_sparsity_args
-        if 'is_prune' in slice_sparsity_args.keys():
-            self.prune_slices = self.slice_sparsity_args['is_prune']
-        else:
-            self.prune_slices = True
-        self.start_epoch = self.slice_sparsity_args['start_epoch']
-        self.end_epoch = self.slice_sparsity_args['end_epoch']
-        self.epoch_rate = self.slice_sparsity_args['epoch_rate']
-        self.block_size = slice_sparsity_args['block_size']
-        self.prune_rate = slice_sparsity_args['prune_rate']
-        self.reg = slice_sparsity_args['reg']
-        self.slice_sparsity_args['layers'] = {name + '.weight': self.prune_rate for name, m in model.named_modules() if isinstance(m, nn.Conv2d)}
-        self.channel_mask_dict = {}
-
-    def extract_slices(self, name: str, w: torch.nn.parameter.Parameter):
-        c_out, c_in, y, x = w.shape  # c_out = number of filters, c_in = number of channels
-        B = c_out // self.block_size  # number of blocks
-        S = B * c_in * y * x  # number of slices
-        # cacluate input and output zeros channels
-        input_cm = torch.where(w.sum(dim=(0, 2, 3)) == 0)[0].to('cpu')
-        B_indices = torch.arange(S).view(B, c_in, y, x)
-        icm_indices = B_indices[:, input_cm, :, :].contiguous().view(-1)
-        channel_mask = self.channel_mask_dict[name] if self.channel_mask_dict[name].shape[0] > 0 else None
-        if channel_mask is not None:
-            channel_mask = channel_mask.to('cpu')
-            # unpruned filters
-            eff_filters = torch.tensor([i for i in range(c_out) if i not in channel_mask])
-            # effective number of blocks
-            eff_B = eff_filters.shape[0] // self.block_size
-            # indices of unpruned filters
-            eff_filter_indices = torch.cat([torch.tensor([b + a for b in range(0, self.block_size * eff_B, eff_B)]) for a in range(eff_B)])
-            filter_indices = torch.cat((eff_filters[eff_filter_indices], channel_mask))
-            ocm_indices = torch.tensor([i for i in range(int(S * (1 - channel_mask.shape[0] / c_out)), S)])
-        else:
-            filter_indices = torch.cat([torch.tensor([b + a for b in range(0, self.block_size * B, B)]) for a in range(B)])
-            ocm_indices = torch.tensor([], dtype=torch.int64)
-        # reordering filters by SNP itterations
-        w = w[filter_indices]
-        # keep indices of original ordering
-        revert_fi = torch.argsort(filter_indices)
-        # split the layer into blocks
-        Blocks = w.view(B, self.block_size, c_in, y, x)  # [B, A, c_in, y, x]
-        # split each block into slices
-        Slices = Blocks.permute(0, 2, 3, 4, 1).contiguous()  # [B, c_in, y, x, A]
-        Slices = Slices.view(S, self.block_size)  # [S, A]
-        # calculate indices of first index of each column
-        fc_indices = torch.tensor([s for s in range(S) if s % y == 0])
-        # calculate indices of zero input channels
-        return Slices, revert_fi, fc_indices, ocm_indices, icm_indices
-
-    def calc_prune_rate(self):
-        if self.slice_sparsity_args['pruning_gradually'] and self.current_epoch < self.end_epoch:  # would be move outside of loop
-            num_steps = sum([1 for i in range(self.start_epoch, self.end_epoch) if
-                             i % self.epoch_rate == 0])
-            curr_step = sum([1 for i in range(self.start_epoch, self.current_epoch + 1) if
-                             i % self.epoch_rate == 0])
-            self.current_pr = self.prune_rate * curr_step / num_steps
-        else:
-            self.current_pr = self.prune_rate
-
-    def regularize(self, model):
-        if not self.prune_slices:
-            return torch.tensor(0).to('cuda')
-        assert self.slice_sparsity_args["pruning_mode"] == "Prune", "sparsity loss is available only on pruned stage"
-        SP_loss = 0
-        # run over the relevant layers, as defined in the config
-        for name, param in model.named_parameters():
-            if name.startswith("module."):  # parallel GPUs automaticaly added this prefix
-                name = name[len("module."):]
-
-            if name in self.slice_sparsity_args['layers'].keys():
-                Slices, _, fc_indices, _, _ = self.extract_slices(name, param)
-                # disable pruning on first index of each column (for loss it's equal to set them as zeros)
-                if self.slice_sparsity_args['disable_first_index']:
-                    Slices[fc_indices] = 0
-                if "L2_norm" in self.slice_sparsity_args['pruning_method']:
-                    # calculate the L2 norm of each slice
-                    L2_norm_slices = torch.norm(Slices, dim=1)
-                    # calculate alpha
-                    alpha = (1 / (L2_norm_slices.detach() + 1e-8)).view(-1, 1)
-                    Slices = Slices * alpha
-                    # calculate L2-norm as a loss
-                    L_loss = torch.norm(Slices, dim=1)
-                    SP_loss += torch.sum(L_loss)
-        if not self.prune_slices or self.slice_sparsity_args["reg"] == 0 or self.current_epoch > self.end_epoch:
-            SP_loss = torch.zeros_like(SP_loss)
-        return SP_loss * self.reg  # * self.current_pr / self.prune_rate
-
-    def prune(self, model, epoch, log=None):
-        self.current_epoch = epoch
-        if not self.prune_slices:
-            return
-        if self.slice_sparsity_args["pruning_mode"] == "Unprune":
-            if log is not None:
-                log.info("Slice pruning disabled in Unprune mode")
-            return
-
-        pruning = (self.start_epoch <= self.current_epoch and self.current_epoch % self.epoch_rate == 0) or self.current_epoch >= self.end_epoch
-
-        if not pruning:
-            if log is not None:
-                log.info("Slice pruning disabled in current epoch")
-            return
-        else:
-            self.calc_prune_rate()
-            if log is not None:
-                log.info(f"Epoch {self.current_epoch}, slice pruning progress:")
-                log.info(f"Pruning from epoch {self.start_epoch} to epoch {self.end_epoch}, with a current pruning rate of {self.current_pr}.")
-                log.info(f"Total target: {self.prune_rate}.")
-            # loop over layers and pruned them
-            for name, param in model.named_parameters():
-                name = name[len("module."):] if name.startswith("module.") else name
-
-                # slice pruning
-                if name in self.slice_sparsity_args['layers'].keys():
-                    # extract slices and sort them by their L2-norm
-                    Slices, revert_indices, fc_indices, ocm_indices, icm_indices = self.extract_slices(name, param)
-                    L2_norm_slices = torch.norm(Slices, dim=1)
-                    # disable pruning on first index of each column (for loss it's equal to set them as zeros)
-                    if self.slice_sparsity_args['disable_first_index']:
-                        L2_norm_slices[fc_indices] = torch.inf
-                    # disable pruning on slices which already pruned during channel pruning
-                    L2_norm_slices[ocm_indices] = torch.inf
-                    L2_norm_slices[icm_indices] = torch.inf
-
-                    # Sort slices by their L2-norm
-                    sorted_slices_norms, _ = L2_norm_slices.flatten().sort()
-                    # Determine the threshold based on p%
-                    slices_threshold_index = int(self.current_pr * len(sorted_slices_norms))
-                    slices_threshold = sorted_slices_norms[slices_threshold_index]
-                    # Create a mask to zero out entries below the threshold
-                    slices_mask = L2_norm_slices <= slices_threshold
-                    Slices[slices_mask] = 0
-                    # prune the layer
-                    c_out, c_in, _, _ = param.shape
-                    B = c_out // self.block_size  # number of blocks
-                    pruned_layer = Slices.view(B, c_in, 3, 3, self.block_size).permute(0, 4, 1, 2, 3).contiguous()
-                    # revert ordering of filters
-                    pruned_layer = pruned_layer.view(c_out, c_in, 3, 3)[revert_indices]
-                    param.data = pruned_layer
-                    if log is not None:
-                        log_str = f"Mask {slices_mask.sum()} / {Slices.shape[0]} slices on {name}"
-                        log.info(f" {log_str}")
-
-        if log is not None:
-            log.info(f" Current slice sparsity: {self.calc_current_sparsity(model)}")
-
-    def calc_current_sparsity(self, model):
-        with torch.no_grad():
-            num_slices = 0
-            num_zero_slices = 0
-            for name, param in model.named_parameters():
-                if name.startswith("module."):  # parallel GPUs automaticaly added this prefix
-                    name = name[len("module."):]
-                if name in self.slice_sparsity_args['layers'].keys():
-                    # icm = torch.where(param.sum(dim=(0, 2, 3)) == 0)
-                    # ocm = torch.where(param.sum(dim=(1, 2, 3)) == 0)
-                    # param[icm] = torch.ones_like(param[icm])
-                    # param[ocm] = torch.zeros_like(param[ocm])
-                    Slices, _, _, _, _ = self.extract_slices(name, param)
-                    num_zero_slices += torch.sum(torch.sum(Slices, dim=1) == 0)
-                    num_slices += Slices.shape[0]
-            return num_zero_slices / num_slices
-
 
 class MACAwareImportance(tp.importance.GroupNormImportance):
     def __init__(self, p=2, layers_mac=None, params=None, current_max=None):
